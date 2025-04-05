@@ -15,13 +15,30 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CalendarIcon, CheckCircle2Icon, ClockIcon, XCircleIcon } from "lucide-react";
 import { format } from "date-fns";
 import CommentDialog from "@/components/CommentDialog";
+import { useUser } from "@clerk/nextjs";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Interview = Doc<"interviews">;
 
 function DashboardPage() {
+  const router = useRouter();
+  const { isSignedIn, isLoaded } = useUser();
   const users = useQuery(api.users.getUsers);
   const interviews = useQuery(api.interviews.getAllInterviews);
   const updateStatus = useMutation(api.interviews.updateInterviewStatus);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Check if user is authenticated
+    if (isLoaded) {
+      if (!isSignedIn) {
+        router.push('/');
+      } else {
+        setIsLoading(false);
+      }
+    }
+  }, [isLoaded, isSignedIn, router]);
 
   const handleStatusUpdate = async (interviewId: Id<"interviews">, status: string) => {
     try {
@@ -32,9 +49,11 @@ function DashboardPage() {
     }
   };
 
-  if (!interviews || !users) return <LoaderUI />;
+  if (isLoading || !isLoaded || users === undefined || interviews === undefined) {
+    return <LoaderUI />;
+  }
 
-  const groupedInterviews = groupInterviews(interviews);
+  const groupedInterviews = groupInterviews(interviews || []);
 
   return (
     <div className="container mx-auto py-10">
@@ -61,7 +80,7 @@ function DashboardPage() {
                     const startTime = new Date(interview.startTime);
 
                     return (
-                      <Card className="hover:shadow-md transition-all">
+                      <Card key={interview._id} className="hover:shadow-md transition-all">
                         {/* CANDIDATE INFO */}
                         <CardHeader className="p-4">
                           <div className="flex items-center gap-3">

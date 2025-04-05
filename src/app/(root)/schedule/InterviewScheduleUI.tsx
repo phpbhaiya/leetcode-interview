@@ -1,7 +1,7 @@
 import { useUser } from "@clerk/nextjs";
 import { useStreamVideoClient } from "@stream-io/video-react-sdk";
 import { useMutation, useQuery } from "convex/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { api } from "../../../../convex/_generated/api";
 import toast from "react-hot-toast";
 import {
@@ -26,19 +26,27 @@ import { Loader2Icon, XIcon } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { TIME_SLOTS } from "@/constants";
 import MeetingCard from "@/components/MeetingCard";
+import LoaderUI from "@/components/LoaderUI";
 
 function InterviewScheduleUI() {
   const client = useStreamVideoClient();
-  const { user } = useUser();
+  const { user, isLoaded } = useUser();
   const [open, setOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const interviews = useQuery(api.interviews.getAllInterviews) ?? [];
-  const users = useQuery(api.users.getUsers) ?? [];
+  const interviews = useQuery(api.interviews.getAllInterviews);
+  const users = useQuery(api.users.getUsers);
   const createInterview = useMutation(api.interviews.createInterview);
 
-  const candidates = users?.filter((u) => u.role === "candidate");
-  const interviewers = users?.filter((u) => u.role === "interviewer");
+  useEffect(() => {
+    if (isLoaded && users !== undefined && interviews !== undefined) {
+      setIsLoading(false);
+    }
+  }, [isLoaded, users, interviews]);
+
+  const candidates = users?.filter((u) => u.role === "candidate") || [];
+  const interviewers = users?.filter((u) => u.role === "interviewer") || [];
 
   const [formData, setFormData] = useState({
     title: "",
@@ -49,8 +57,22 @@ function InterviewScheduleUI() {
     interviewerIds: user?.id ? [user.id] : [],
   });
 
+  // Update interviewerIds when user is loaded
+  useEffect(() => {
+    if (user?.id && !formData.interviewerIds.includes(user.id)) {
+      setFormData(prev => ({
+        ...prev,
+        interviewerIds: [user.id, ...prev.interviewerIds]
+      }));
+    }
+  }, [user?.id, formData.interviewerIds]);
+
   const scheduleMeeting = async () => {
-    if (!client || !user) return;
+    if (!client || !user) {
+      toast.error("Client or user not available, please try again");
+      return;
+    }
+    
     if (!formData.candidateId || formData.interviewerIds.length === 0) {
       toast.error("Please select both candidate and at least one interviewer");
       return;
@@ -130,6 +152,8 @@ function InterviewScheduleUI() {
   const availableInterviewers = interviewers.filter(
     (i) => !formData.interviewerIds.includes(i.clerkId)
   );
+
+  if (isLoading) return <LoaderUI />;
 
   return (
     <div className="container max-w-7xl mx-auto p-6 space-y-8">
